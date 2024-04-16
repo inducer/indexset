@@ -4,11 +4,17 @@ extern crate indexmap;
 
 // We use this to promise that PyObject is comparable and hashable.
 #[derive(Clone)]
-struct MyPyObject(PyObject);
+struct MyPyObject {
+    hash: isize,
+    obj: PyObject,
+}
 
 impl PartialEq for MyPyObject {
     fn eq(&self, other: &Self) -> bool {
-        Python::with_gil(|py| self.0.bind(py).eq(other.0.bind(py)).unwrap())
+        if self.hash != other.hash {
+            return false;
+        }
+        Python::with_gil(|py| self.obj.bind(py).eq(other.obj.bind(py)).unwrap())
     }
 }
 
@@ -16,10 +22,7 @@ impl Eq for MyPyObject {}
 
 impl Hash for MyPyObject {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        Python::with_gil(|py| {
-            let hash_int = self.0.bind(py).hash().unwrap();
-            hash_int.hash(state);
-        })
+        self.hash.hash(state);
     }
 }
 
@@ -40,7 +43,7 @@ impl IndexSetIterator {
             .borrow(slf.py())
             .0
             .get_index(slf.index)
-            .map(|x| x.0.clone_ref(slf.py()));
+            .map(|x| x.obj.clone_ref(slf.py()));
         slf.index += 1;
         res
     }
@@ -64,8 +67,11 @@ impl IndexSet {
         Ok(self.0.clear())
     }
 
-    pub fn add(&mut self, item: PyObject) -> PyResult<()> {
-        self.0.insert(MyPyObject(item));
+    pub fn add(&mut self, item: Bound<'_, PyAny>) -> PyResult<()> {
+        self.0.insert(MyPyObject {
+            hash: item.hash()?,
+            obj: item.unbind(),
+        });
         Ok(())
     }
 
@@ -106,7 +112,7 @@ impl FrozenIndexSet {
     fn __hash__(slf: Bound<'_, Self>) -> u64 {
         let mut hash = 0;
         for val in slf.borrow().0.iter() {
-            hash ^= val.0.bind(slf.py()).hash().unwrap();
+            hash ^= val.obj.bind(slf.py()).hash().unwrap();
         }
         hash.try_into().unwrap()
     }
