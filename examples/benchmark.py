@@ -1,7 +1,7 @@
 from time import process_time_ns
 
 from indexset import IndexSet
-n = 10000000
+n = 10_000_000
 
 def test_create(tp):
     start = process_time_ns()
