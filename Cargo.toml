@@ -9,5 +9,9 @@ name = "indexset"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = "0.21.1"
 indexmap = "^2.2.6"
+
+[dependencies.pyo3]
+git = "https://github.com/PyO3/pyo3.git"
+rev = "4fe5e8c689f58e80e399761dd77408556f769227"
+features = ["py-clone"]
