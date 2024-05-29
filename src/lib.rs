@@ -4,6 +4,7 @@ extern crate indexmap;
 
 // We use this to promise that PyObject is comparable and hashable.
 #[derive(Clone)]
+#[repr(transparent)]
 struct MyPyObject(PyObject);
 
 impl PartialEq for MyPyObject {
@@ -20,6 +21,24 @@ impl Hash for MyPyObject {
             let hash_int = self.0.bind(py).hash().unwrap();
             hash_int.hash(state);
         })
+    }
+}
+
+#[repr(transparent)]
+struct MyBoundAny<'py>(Bound<'py, PyAny>);
+
+impl<'py> PartialEq for MyBoundAny<'py> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(other.0.as_borrowed()).unwrap()
+    }
+}
+
+impl<'py> Eq for MyBoundAny<'py> {}
+
+impl<'py> Hash for MyBoundAny<'py> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let hash_int = self.0.hash().unwrap();
+        hash_int.hash(state);
     }
 }
 
@@ -64,8 +83,12 @@ impl IndexSet {
         Ok(self.0.clear())
     }
 
-    pub fn add(&mut self, item: PyObject) -> PyResult<()> {
-        self.0.insert(MyPyObject(item));
+    pub fn add<'py>(&'py mut self, item: Bound<'py, PyAny>) -> PyResult<()> {
+        let sptr: *mut indexmap::IndexSet<MyPyObject> = &mut self.0;
+        unsafe {
+            let pyset = &mut *(sptr as *mut indexmap::IndexSet<MyBoundAny<'py>>);
+            pyset.insert(MyBoundAny(item));
+        }
         Ok(())
     }
 
